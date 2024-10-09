@@ -53,7 +53,7 @@ class AgeMatcher:
 
     def _shuffle_df(self):
         self.cases_df = self.cases_df.sample(frac=1, random_state=self.random_state)
-        self.controls_df = self.controls_df.sample(frac=1, random_state=self.random_state
+        self.controls_df = self.controls_df.sample(frac=1, random_state=self.random_state)
 
     def _add_match(self, case_id, control_id, age_diff):
         self.matches['case_id'].append(int(case_id))
