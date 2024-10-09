@@ -29,6 +29,39 @@ class AgeMatcher:
         The class assumes that the cases and controls dataframes have the same column names for age and optionally sex.
         The class assumes that in the worst case, the number of cases is lesser than the number of controls.
         The age_tol is converted to upper ceiling integer for the sivan strategy.
+
+    Example:
+        ```python
+        import pandas as pd
+        from age_matcher.age_matcher import AgeMatcher
+
+        # Create example data
+        cases_data = {
+            'id': [1, 2, 3, 4],
+            'age': [25, 35, 45, 55],
+            'sex': ['M', 'F', 'M', 'F']
+        }
+        controls_data = {
+            'id': [5, 6, 7, 8, 9, 10],
+            'age': [26, 36, 46, 56, 30, 40],
+            'sex': ['M', 'F', 'M', 'F', 'M', 'F']
+        }
+
+        cases_df = pd.DataFrame(cases_data).setIndex('id')
+        controls_df = pd.DataFrame(controls_data).setIndex('id')
+
+        # Initialize AgeMatcher
+        matcher = AgeMatcher(age_tol=5, age_col='age', sex_col='sex', strategy='greedy', shuffle_df=True, random_state=42)
+
+        # Perform matching
+        matched_cases, matched_controls = matcher(cases_df, controls_df)
+
+        # Display results
+        print("Matched Cases:")
+        print(matched_cases)
+        print("Matched Controls:")
+        print(matched_controls)
+        ```
     """
 
     def __init__(self, age_tol: float = 3, age_col: str = 'age', sex_col: Optional[str] = 'sex',
