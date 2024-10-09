@@ -1,6 +1,6 @@
 import logging
 import math
-from typing import List, Optional, Tuple, Union, Literal, Dict
+from typing import Dict, List, Literal, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -8,10 +8,28 @@ from scipy.stats import ks_2samp, ttest_ind
 
 
 class AgeMatcher:
+    """Class to match cases to controls based on age and optionally sex.
+
+    Attributes:
+       cases_df (pd.DataFrame): DataFrame containing the cases.
+       controls_df (pd.DataFrame): DataFrame containing the controls.
+       age_tol (float): Age tolerance for matching.
+       age_col (str): Column name for age.
+       sex_col (Optional[str]): Column name for sex.
+       strategy (Literal['greedy', 'sivan']): Matching strategy to use.
+       shuffle_df (bool): Whether to shuffle the DataFrames before matching.
+       random_state (Optional[int]): Random state for shuffling.
+       convert_age_to_int (bool): Whether to convert age to integer.
+       verbose (Union[bool, int]): Verbosity level for logging.
+       matches (Dict[str, List[Union[int, float]]]): Dictionary to store matches.
+       unmatched_cases (List[int]): List of unmatched case IDs.
+       _info (dict): Dictionary to store information about the matching process.
+    """
+
     def __init__(self,
                  cases_df: pd.DataFrame,
                  controls_df: pd.DataFrame,
-                 age_tol: float = 3, # Note that the tol is converted to int for the sivan strategy
+                 age_tol: float = 3,  # Note that the tol is converted to int for the sivan strategy
                  age_col: str = 'age',
                  sex_col: Optional[str] = 'sex',
                  strategy: Literal['greedy', 'sivan'] = 'greedy',
@@ -19,7 +37,25 @@ class AgeMatcher:
                  random_state: Optional[int] = None,
                  convert_age_to_int: bool = True,
                  verbose: Union[bool, int] = True):
+        """Initializes the AgeMatcher with the given parameters.
 
+        Args:
+            cases_df (pd.DataFrame): DataFrame containing the cases.
+            controls_df (pd.DataFrame): DataFrame containing the controls.
+            age_tol (float): Age tolerance for matching.
+            age_col (str): Column name for age.
+            sex_col (Optional[str]): Column name for sex.
+            strategy (Literal['greedy', 'sivan']): Matching strategy to use.
+            shuffle_df (bool): Whether to shuffle the DataFrames before matching.
+            random_state (Optional[int]): Random state for shuffling.
+            convert_age_to_int (bool): Whether to convert age to integer.
+            verbose (Union[bool, int]): Verbosity level for logging.
+
+        Notes:
+            The class assumes that the cases and controls dataframes have the same column names for age and optionally sex.
+            The class assumes that in the worst case, the number of cases is lesser than the number of controls.
+            The age_tol is converted to int for the sivan strategy.
+        """
         self.setup_logger(verbose)
         self.cases_df = cases_df
         self.controls_df = controls_df
@@ -38,14 +74,23 @@ class AgeMatcher:
         if convert_age_to_int:
             self._convert_age_to_int()
 
-        self.matches: Dict[str, List[Union[int,float]]] = {'case_id': [], 'control_id': [], 'age_diff': []}
+        self.matches: Dict[str, List[Union[int, float]]] = {'case_id': [], 'control_id': [], 'age_diff': []}
         self.unmatched_cases: List[int] = []
         self._info: dict = {}
 
     def __call__(self):
+        """Calls the match method to perform the matching."""
         return self.match()
 
     def _verify_col(self, col):
+        """Verifies that the given column exists in both cases and controls DataFrames.
+
+        Args:
+            col (str): Column name to verify.
+
+        Raises:
+            ValueError: If the column is not found in either DataFrame.
+        """
         if col not in self.cases_df.columns:
             self.logger.error(f"Provided '{col}' not found in cases dataframe")
             raise ValueError(f"Provided '{col}' not found in cases dataframe")
@@ -54,6 +99,14 @@ class AgeMatcher:
             raise ValueError(f"Column '{col}' not found in controls dataframe")
 
     def setup_logger(self, verbose):
+        """Sets up the logger with the given verbosity level.
+
+        Args:
+            verbose (Union[bool, int]): Verbosity level for logging.
+
+        Raises:
+            ValueError: If verbose is not a boolean or an integer.
+        """
         self.logger = logging.getLogger(__name__)
         self.logger.addHandler(logging.StreamHandler())
         if isinstance(verbose, bool):
@@ -62,20 +115,36 @@ class AgeMatcher:
             self.logger.setLevel(verbose)
         else:
             raise ValueError("verbose must be a boolean or an integer")
+
     def _convert_age_to_int(self):
+        """Converts the age column to integer type in both cases and controls DataFrames."""
         self.cases_df[self.age_col] = self.cases_df[self.age_col].astype(int)
         self.controls_df[self.age_col] = self.controls_df[self.age_col].astype(int)
 
     def _shuffle_df(self):
+        """Shuffles the cases and controls DataFrames."""
         self.cases_df = self.cases_df.sample(frac=1, random_state=self.random_state)
         self.controls_df = self.controls_df.sample(frac=1, random_state=self.random_state)
 
     def _add_match(self, case_id, control_id, age_diff):
+        """Adds a match to the matches dictionary.
+
+        Args:
+            case_id (int): ID of the case.
+            control_id (int): ID of the control.
+            age_diff (float): Age difference between the case and control.
+        """
         self.matches['case_id'].append(int(case_id))
         self.matches['control_id'].append(int(control_id))
         self.matches['age_diff'].append(float(age_diff))
 
     def _greedy_match(self, cases: pd.DataFrame, controls: pd.DataFrame):
+        """Performs greedy matching of cases to controls based on age tolerance.
+
+        Args:
+            cases (pd.DataFrame): DataFrame containing the cases.
+            controls (pd.DataFrame): DataFrame containing the controls.
+        """
         used_controls = set()
         for case_idx, case in cases.iterrows():
             available_controls = controls[~controls.index.isin(used_controls)].copy()
@@ -91,7 +160,15 @@ class AgeMatcher:
                 # TODO: Log warning
 
     def _sivan_match(self, cases: pd.DataFrame, controls: pd.DataFrame):
-        """Uses upper ciel of age tolerance to match cases to controls."""
+        """Performs matching of cases to controls, more stringent than greedy matching.
+
+        Args:
+            cases (pd.DataFrame): DataFrame containing the cases.
+            controls (pd.DataFrame): DataFrame containing the controls.
+
+        Notes:
+            Uses the upper cieling of the age tolerance to match cases to controls.
+        """
         used_controls = set()
         used_cases = set()
 
@@ -116,6 +193,11 @@ class AgeMatcher:
                     self._add_match(case_idx, matched_control.index[0], matched_control['_age_diff'].values[0])
 
     def match(self):
+        """Matches cases to controls based on the specified strategy.
+
+        Returns:
+            Tuple[pd.DataFrame, pd.DataFrame]: DataFrames of matched cases and controls.
+        """
         if self.shuffle_df:
             self._shuffle_df()
         if self.sex_col is not None:
@@ -130,7 +212,16 @@ class AgeMatcher:
         return self.get_matched_data()
 
     def _match(self, cases, controls, strategy: str = 'greedy'):
-        """Performs the matching of cases to controls based on age tolerance."""
+        """Performs the matching of cases to controls based on the specified strategy.
+
+        Args:
+            cases (pd.DataFrame): DataFrame containing the cases.
+            controls (pd.DataFrame): DataFrame containing the controls.
+            strategy (str): Matching strategy to use ('greedy' or 'sivan').
+
+        Raises:
+            ValueError: If an invalid matching strategy is provided.
+        """
         match strategy:
             case 'greedy':
                 self._greedy_match(cases, controls)
@@ -139,12 +230,18 @@ class AgeMatcher:
             case _:
                 raise ValueError(f"Invalid matching strategy: {strategy}, must be 'greedy' or 'sivan'")
 
-    def get_matched_data(self) -> pd.DataFrame:
+    def get_matched_data(self) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        """Retrieves the matched cases and controls DataFrames.
+
+        Returns:
+            Tuple[pd.DataFrame, pd.DataFrame]: DataFrames of matched cases and controls.
+        """
         matched_cases = self.cases_df.loc[self.matches['case_id'], :]
         matched_controls = self.controls_df.loc[self.matches['control_id'], :]
         return matched_cases, matched_controls
 
     def get_info(self):
+        """Gathers information about the matching process and updates the _info attribute."""
         self._info.update({'num_cases': len(self.cases_df),
                            'num_controls': len(self.controls_df),
                            'num_matched': len(self.matches['case_id']), })
@@ -152,6 +249,7 @@ class AgeMatcher:
         self._info.update(self._calc_stats())
 
     def log_info(self):
+        """Logs information about the matching process."""
         self.logger.info(f"Number of cases: {self._info['num_cases']}")
         self.logger.info(f"Number of controls: {self._info['num_controls']}")
         self.logger.info(f"Number of matched: {self._info['num_matched']}")
@@ -163,11 +261,21 @@ class AgeMatcher:
         self.logger.info(f"KS p-value: {self._info['ks_pval']:.4f}")
 
     def _calc_metrics(self):
+        """Calculates the mean absolute error and mean squared error of the matches.
+
+        Returns:
+            dict: Dictionary containing the MAE and MSE.
+        """
         mae = np.mean(np.abs(self.matches['age_diff']))
         mse = np.mean(np.square(self.matches['age_diff']))
         return {'mae': mae, 'mse': mse}
 
     def _calc_stats(self):
+        """Calculates statistical tests (T-test and Kolmogorov–Smirnov test) on the matched data.
+
+        Returns:
+            dict: Dictionary containing the T-test and Kolmogorov–Smirnov test statistics and p-values.
+        """
         matched_cases, matched_controls = self.get_matched_data()
         ttest_stat, ttest_pval = ttest_ind(matched_cases[self.age_col], matched_controls[self.age_col],
                                            alternative='two-sided')
