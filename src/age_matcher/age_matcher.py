@@ -1,4 +1,6 @@
+import logging
 import math
+from typing import List, Optional, Tuple, Union, Literal, Dict
 
 import numpy as np
 import pandas as pd
@@ -9,14 +11,16 @@ class AgeMatcher:
     def __init__(self,
                  cases_df: pd.DataFrame,
                  controls_df: pd.DataFrame,
-                 age_tol: float = 3,
+                 age_tol: float = 3, # Note that the tol is converted to int for the sivan strategy
                  age_col: str = 'age',
-                 sex_col: str = 'sex',
-                 strategy: str = 'greedy',
+                 sex_col: Optional[str] = 'sex',
+                 strategy: Literal['greedy', 'sivan'] = 'greedy',
                  shuffle_df: bool = True,
-                 random_state: int = None,
+                 random_state: Optional[int] = None,
                  convert_age_to_int: bool = True,
-                 verbose: bool = True):
+                 verbose: Union[bool, int] = True):
+
+        self.setup_logger(verbose)
         self.cases_df = cases_df
         self.controls_df = controls_df
         self.age_tol = age_tol
@@ -34,19 +38,30 @@ class AgeMatcher:
         if convert_age_to_int:
             self._convert_age_to_int()
 
-        self.matches = {'case_id': [], 'control_id': [], 'age_diff': []}
-        self.unmatched_cases = []
-        self._info = {}
+        self.matches: Dict[str, List[Union[int,float]]] = {'case_id': [], 'control_id': [], 'age_diff': []}
+        self.unmatched_cases: List[int] = []
+        self._info: dict = {}
 
     def __call__(self):
         return self.match()
 
     def _verify_col(self, col):
         if col not in self.cases_df.columns:
+            self.logger.error(f"Provided '{col}' not found in cases dataframe")
             raise ValueError(f"Provided '{col}' not found in cases dataframe")
         if col not in self.controls_df.columns:
+            self.logger.error(f"Provided '{col}' not found in controls dataframe")
             raise ValueError(f"Column '{col}' not found in controls dataframe")
 
+    def setup_logger(self, verbose):
+        self.logger = logging.getLogger(__name__)
+        self.logger.addHandler(logging.StreamHandler())
+        if isinstance(verbose, bool):
+            self.logger.setLevel(logging.DEBUG if verbose else logging.WARNING)
+        elif isinstance(verbose, int):
+            self.logger.setLevel(verbose)
+        else:
+            raise ValueError("verbose must be a boolean or an integer")
     def _convert_age_to_int(self):
         self.cases_df[self.age_col] = self.cases_df[self.age_col].astype(int)
         self.controls_df[self.age_col] = self.controls_df[self.age_col].astype(int)
@@ -62,7 +77,7 @@ class AgeMatcher:
 
     def _greedy_match(self, cases: pd.DataFrame, controls: pd.DataFrame):
         used_controls = set()
-        for case_idx, case in cases:
+        for case_idx, case in cases.iterrows():
             available_controls = controls[~controls.index.isin(used_controls)].copy()
             available_controls['_age_diff'] = abs(available_controls[self.age_col] - case[self.age_col])
             if len(available_controls) == 0:
@@ -111,6 +126,7 @@ class AgeMatcher:
         else:
             self._match(self.cases_df, self.controls_df, self.strategy)
         self.get_info()
+        self.log_info()
         return self.get_matched_data()
 
     def _match(self, cases, controls, strategy: str = 'greedy'):
@@ -131,9 +147,20 @@ class AgeMatcher:
     def get_info(self):
         self._info.update({'num_cases': len(self.cases_df),
                            'num_controls': len(self.controls_df),
-                           'num_matched': len(self.matches), })
+                           'num_matched': len(self.matches['case_id']), })
         self._info.update(self._calc_metrics())
         self._info.update(self._calc_stats())
+
+    def log_info(self):
+        self.logger.info(f"Number of cases: {self._info['num_cases']}")
+        self.logger.info(f"Number of controls: {self._info['num_controls']}")
+        self.logger.info(f"Number of matched: {self._info['num_matched']}")
+        self.logger.info(f"Mean Absolute Error: {self._info['mae']:.4f}")
+        self.logger.info(f"Mean Squared Error: {self._info['mse']:.4f}")
+        self.logger.info(f"T-test statistic: {self._info['ttest_stat']:.4f}")
+        self.logger.info(f"T-test p-value: {self._info['ttest_pval']:.4f}")
+        self.logger.info(f"KS statistic: {self._info['ks_stat']:.4f}")
+        self.logger.info(f"KS p-value: {self._info['ks_pval']:.4f}")
 
     def _calc_metrics(self):
         mae = np.mean(np.abs(self.matches['age_diff']))
