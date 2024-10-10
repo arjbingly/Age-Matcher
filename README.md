@@ -46,7 +46,7 @@ Here's a basic example of how to use the Age Matcher library:
 
 ```python
 import pandas as pd
-from age_matcher.age_matcher import AgeMatcher
+from age_matcher import AgeMatcher
 
 # Create example data
 cases_data = {
@@ -74,6 +74,32 @@ print("Matched Cases:")
 print(matched_cases)
 print("Matched Controls:")
 print(matched_controls)
+```
+Expected output:
+```console
+Number of cases: 4
+Number of controls: 6
+Number of matched: 4
+Mean Absolute Error: 1.0000
+Mean Squared Error: 1.0000
+T-test statistic: -0.1095
+T-test p-value: 0.9163
+KS statistic: 0.2500
+KS p-value: 1.0000
+Matched Cases:
+    age sex
+id         
+2    35   F
+4    55   F
+1    25   M
+3    45   M
+Matched Controls:
+    age sex
+id         
+6    36   F
+8    56   F
+5    26   M
+7    46   M
 ```
 
 ## Testing
