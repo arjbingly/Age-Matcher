@@ -16,7 +16,7 @@ class AgeMatcher:
        age_tol (float): Age tolerance for matching.
        age_col (str): Column name for age.
        sex_col (Optional[str]): Column name for sex.
-       strategy (Literal['greedy', 'sivan']): Matching strategy to use.
+       strategy (Literal['greedy', 'stricter']): Matching strategy to use.
        shuffle_df (bool): Whether to shuffle the DataFrames before matching.
        random_state (Optional[int]): Random state for shuffling.
        convert_age_to_int (bool): Whether to convert age to integer.
@@ -28,7 +28,7 @@ class AgeMatcher:
     Notes:
         The class assumes that the cases and controls dataframes have the same column names for age and optionally sex.
         The class assumes that in the worst case, the number of cases is lesser than the number of controls.
-        The age_tol is converted to upper ceiling integer for the sivan strategy.
+        The age_tol is converted to upper ceiling integer for the stricter strategy.
 
     Example:
         ```python
@@ -65,7 +65,7 @@ class AgeMatcher:
     """
 
     def __init__(self, age_tol: float = 3, age_col: str = 'age', sex_col: Optional[str] = 'sex',
-                 strategy: Literal['greedy', 'sivan'] = 'sivan', shuffle_df: bool = True,
+                 strategy: Literal['greedy', 'stricter'] = 'stricter', shuffle_df: bool = True,
                  random_state: Optional[int] = None, convert_age_to_int: bool = True, verbose: Union[bool, int] = True):
         """Initializes the AgeMatcher with the given parameters.
 
@@ -73,7 +73,7 @@ class AgeMatcher:
             age_tol (float): Age tolerance for matching. Defaults to 3.
             age_col (str): Column name for age. Defaults to 'age'.
             sex_col (Optional[str]): Column name for sex. Defaults to 'sex'. If None does not match based on sex.
-            strategy (Literal['greedy', 'sivan']): Matching strategy to use. Defaults to 'sivan'.
+            strategy (Literal['greedy', 'stricter']): Matching strategy to use. Defaults to 'stricter'.
             shuffle_df (bool): Whether to shuffle the DataFrames before matching. Defaults to True.
             random_state (Optional[int]): Random state for shuffling. Defaults to None.
             convert_age_to_int (bool): Whether to convert age to integer. Defaults to True.
@@ -178,7 +178,7 @@ class AgeMatcher:
             else:
                 self.unmatched_cases.append(case_idx)  # TODO: Log warning
 
-    def _sivan_match(self, cases: pd.DataFrame, controls: pd.DataFrame):
+    def _stricter_match(self, cases: pd.DataFrame, controls: pd.DataFrame):
         """Performs matching of cases to controls, more stringent than greedy matching.
 
         Args:
@@ -250,7 +250,7 @@ class AgeMatcher:
         Args:
             cases (pd.DataFrame): DataFrame containing the cases.
             controls (pd.DataFrame): DataFrame containing the controls.
-            strategy (str): Matching strategy to use ('greedy' or 'sivan').
+            strategy (str): Matching strategy to use ('greedy' or 'stricter').
 
         Raises:
             ValueError: If an invalid matching strategy is provided.
@@ -258,10 +258,10 @@ class AgeMatcher:
         match strategy:
             case 'greedy':
                 self._greedy_match(cases, controls)
-            case 'sivan':
-                self._sivan_match(cases, controls)
+            case 'stricter':
+                self._stricter_match(cases, controls)
             case _:
-                raise ValueError(f"Invalid matching strategy: {strategy}, must be 'greedy' or 'sivan'")
+                raise ValueError(f"Invalid matching strategy: {strategy}, must be 'greedy' or 'stricter'")
 
     def get_matched_data(self) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """Retrieves the matched cases and controls DataFrames.
