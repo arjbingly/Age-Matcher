@@ -154,8 +154,8 @@ class AgeMatcher:
             control_id (int): ID of the control.
             age_diff (float): Age difference between the case and control.
         """
-        self.matches['case_id'].append(int(case_id))
-        self.matches['control_id'].append(int(control_id))
+        self.matches['case_id'].append(case_id)
+        self.matches['control_id'].append(control_id)
         self.matches['age_diff'].append(float(age_diff))
 
     def _greedy_match(self, cases: pd.DataFrame, controls: pd.DataFrame):
@@ -207,7 +207,7 @@ class AgeMatcher:
                 available_controls['_age_diff'] = abs(available_controls[self.age_col] - case[self.age_col])
                 matched_control = available_controls.nsmallest(1, '_age_diff', keep='first')
                 if matched_control['_age_diff'].values[0] <= age_diff:
-                    used_controls.add(int(matched_control.index[0]))
+                    used_controls.add(matched_control.index[0])
                     used_cases.add(case_idx)
                     self._add_match(case_idx, matched_control.index[0], matched_control['_age_diff'].values[0])
 
@@ -255,13 +255,20 @@ class AgeMatcher:
         Raises:
             ValueError: If an invalid matching strategy is provided.
         """
-        match strategy:
-            case 'greedy':
-                self._greedy_match(cases, controls)
-            case 'stricter':
-                self._stricter_match(cases, controls)
-            case _:
-                raise ValueError(f"Invalid matching strategy: {strategy}, must be 'greedy' or 'stricter'")
+        # match strategy:
+        #     case 'greedy':
+        #         self._greedy_match(cases, controls)
+        #     case 'stricter':
+        #         self._stricter_match(cases, controls)
+        #     case _:
+        #         raise ValueError(f"Invalid matching strategy: {strategy}, must be 'greedy' or 'stricter'")
+
+        if strategy == "greedy":
+            self._greedy_match(cases, controls)
+        elif strategy == "stricter":
+            self._stricter_match(cases, controls)
+        else:
+            raise ValueError(f"Invalid matching strategy: {strategy}, must be 'greedy' or 'stricter'")
 
     def get_matched_data(self) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """Retrieves the matched cases and controls DataFrames.
